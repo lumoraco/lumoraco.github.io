@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>LUMORA — Live Interpreter</title>
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b3d2e'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif'%3E%F0%9F%97%A3%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b3d2e'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif'%3E%F0%9F%97%A3%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href='data:application/manifest+json,{"name":"LUMORA Interpreter","short_name":"Interpreter","start_url":"./talk.html","display":"standalone","background_color":"%23f4f5f6","theme_color":"%230b3d2e","icons":[{"src":"data:image/svg%2Bxml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 512 512%27%3E%3Crect width=%27512%27 height=%27512%27 rx=%27110%27 fill=%27%230b3d2e%27/%3E%3Ctext x=%27256%27 y=%27350%27 font-size=%27260%27 text-anchor=%27middle%27 fill=%27white%27 font-family=%27sans-serif%27%3E%F0%9F%97%A3%3C/text%3E%3C/svg%3E","sizes":"512x512","type":"image/svg+xml","purpose":"any"}]}'>
+<style>
+  :root{--ink:#111;--mut:#6b6b6b;--line:#e3e3e3;--brand:#0b3d2e;--accent:#e8562a;--rec:#d32f2f;--me:#eef5f2;--them:#fff}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  /* display:flex on the overlays would otherwise beat the hidden attribute */
+  [hidden]{display:none !important}
+  html,body{height:100%}
+  body{margin:0;background:#f4f5f6;color:var(--ink);
+       font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR","Noto Sans JP","Noto Sans SC",sans-serif;
+       display:flex;flex-direction:column;overflow:hidden}
+  header{background:#fff;color:var(--ink);padding:9px 12px;display:flex;align-items:center;gap:9px;flex:none;border-bottom:1px solid var(--line)}
+  header .t{display:flex;align-items:center}
+  header .t img{height:22px;width:auto;display:block}
+  #lat{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums;min-width:52px}
+  header select{margin-left:auto;background:#f4f5f6;color:var(--ink);border:1px solid var(--line);
+                border-radius:7px;padding:6px 8px;font-size:14px;max-width:150px}
+  header select option{color:var(--ink)}
+  header button{background:#f4f5f6;border:1px solid var(--line);color:var(--ink);
+                border-radius:7px;padding:6px 9px;font-size:15px;cursor:pointer}
+  #log{flex:1;overflow-y:auto;padding:12px 12px 4px;-webkit-overflow-scrolling:touch}
+  .row{display:flex;margin-bottom:10px}
+  .row.me{justify-content:flex-end}
+  .b{max-width:88%;background:var(--them);border:1px solid var(--line);border-radius:14px;padding:11px 13px;
+     box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .row.me .b{background:var(--me);border-color:#cfe0d8}
+  .row.livebub .b{border-color:var(--accent);box-shadow:0 0 0 2px rgba(232,86,42,.14)}
+  .big{font-size:var(--fs,22px);font-weight:600;line-height:1.35;word-break:break-word;min-height:1.35em}
+  .orig{font-size:13px;color:var(--mut);margin-top:6px;word-break:break-word}
+  .tools{margin-top:7px;display:flex;gap:8px}
+  .tools button{background:#f2f2f2;border:1px solid var(--line);border-radius:6px;font-size:13px;padding:3px 9px;cursor:pointer}
+  .hint{color:var(--mut);font-size:14px;text-align:center;padding:24px 18px;line-height:1.75}
+  .hint .guest{margin-top:16px;padding-top:15px;border-top:1px solid var(--line);font-size:16px;color:var(--ink);font-weight:600}
+  .banner{margin:0 12px 10px;padding:10px 12px;border-radius:9px;font-size:14px}
+  .banner.err{background:#fdeceb;color:#8a1c12;border:1px solid #f5c6c2}
+  .banner.warn{background:#fff6ed;color:#7a4a17;border:1px solid #f3d8bd;line-height:1.6}
+  .banner.warn b{display:block;margin-bottom:2px}
+  footer{flex:none;background:#fff;border-top:1px solid var(--line);padding:9px 12px calc(9px + env(safe-area-inset-bottom))}
+  .mics{display:flex;gap:10px}
+  .mic{flex:1;padding:18px 8px;border:0;border-radius:13px;font-size:17px;font-weight:800;color:#fff;cursor:pointer;line-height:1.25;
+       transition:background .15s}
+  .mic small{display:block;font-weight:500;font-size:12px;opacity:.88;margin-top:2px}
+  .mic.a{background:var(--brand)} .mic.b{background:var(--accent)}
+  .mic.on{background:var(--rec);box-shadow:0 0 0 3px rgba(211,47,47,.25)}
+  .mic.on small{opacity:1}
+  .mic.dim{opacity:.35}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;margin-right:7px;
+       animation:blink 1s steps(2,start) infinite;vertical-align:middle}
+  @keyframes blink{50%{opacity:.15}}
+  .typerow{display:flex;gap:8px;margin-top:9px}
+  .typerow input{flex:1;padding:11px;border:1px solid var(--line);border-radius:9px;font-size:16px}
+  .typerow button{padding:0 15px;border:1px solid var(--line);background:#f2f2f2;border-radius:9px;font-size:15px;cursor:pointer}
+  #status{font-size:13px;color:var(--mut);text-align:center;min-height:19px;margin-top:6px}
+  dialog{border:0;border-radius:14px;padding:0;width:min(94vw,480px);box-shadow:0 12px 40px rgba(0,0,0,.3);max-height:88vh}
+  dialog::backdrop{background:rgba(0,0,0,.45)}
+  .pad{padding:16px;overflow-y:auto;max-height:88vh}
+  .pad h3{margin:0 0 12px}
+  label.f{display:block;margin-bottom:12px;font-size:14px}
+  label.f span{display:block;color:var(--mut);margin-bottom:4px}
+  label.f input,label.f select,label.f textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:15px;font-family:inherit}
+  label.f textarea{min-height:70px}
+  .chk{display:flex;gap:9px;align-items:flex-start;font-size:14px;margin-bottom:12px}
+  .actions{display:flex;gap:9px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap}
+  .actions button{padding:10px 15px;border-radius:8px;border:1px solid var(--line);background:#f2f2f2;font-size:15px;cursor:pointer}
+  .actions .p{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:700}
+  .note{font-size:12.5px;color:var(--mut);line-height:1.6}
+  #gate{position:fixed;inset:0;background:#fff;color:var(--ink) !important;color:#fff;z-index:9000;display:flex;
+        flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+  #gate img{height:36px;margin-bottom:22px}
+  #gate h2{margin:0 0 6px;font-size:19px;font-weight:700}
+  #gate p{margin:0 0 20px;font-size:13.5px;color:var(--mut);max-width:330px;line-height:1.6}
+  #gate input{width:min(300px,80vw);padding:13px;border-radius:10px;border:1px solid var(--line);font-size:17px;text-align:center}
+  #gate button{margin-top:12px;width:min(300px,80vw);padding:13px;border-radius:10px;border:0;
+               background:var(--accent);color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+  #gateErr{margin-top:12px;font-size:13.5px;color:#c0392b;min-height:19px}
+  #help{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8000;display:flex;align-items:center;justify-content:center;padding:18px}
+  #help .box{background:#fff;color:var(--ink);border-radius:14px;padding:20px;max-width:400px;max-height:86vh;overflow-y:auto}
+  #help h3{margin:0 0 12px}
+  #help ol{margin:0 0 14px;padding-left:20px;font-size:14.5px;line-height:1.75}
+  #help .warn{background:#fff6ed;border:1px solid #f3d8bd;border-radius:9px;padding:11px;font-size:13px;line-height:1.6;color:#7a4a17}
+</style>
+</head>
+<body>
+
+<div id="gate" hidden>
+  <img src="" alt="LUMORA" id="gateLogo">
+  <h2>LAMKO / LUMORA staff only</h2>
+  <p>Enter the passphrase to open the interpreter. This device will remember it.</p>
+  <input id="gatePw" type="password" autocomplete="current-password" placeholder="Passphrase" enterkeyhint="go">
+  <button id="gateGo">Open</button>
+  <div id="gateErr"></div>
+</div>
+
+<div id="help" hidden><div class="box">
+  <h3>How to use this</h3>
+  <ol>
+    <li>Tap <b>English</b> and speak normally. It keeps listening until you tap the same button again.</li>
+    <li>The Korean appears in large type <i>while</i> you speak, and is read out loud when you finish a sentence.</li>
+    <li>Tap <b>한국어</b> and hand the phone over when they answer.</li>
+    <li>Change their language from the box at the top right — 14 languages.</li>
+  </ol>
+  <div class="warn"><b>Before you hand the phone to someone new:</b> open <b>⋯</b> and tap
+  <b>New conversation</b>. Otherwise they can scroll back and read what you discussed with the previous visitor.</div>
+  <div class="actions"><button class="p" id="helpClose">Got it</button></div>
+</div></div>
+
+<header>
+  <span class="t"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAAAqCAYAAACN8NbbAAAokElEQVR4nO2deZhdVZXof2ufc+6tygzIKKMmqUpVImBAUdQCG3Hs1tda6XZqnFoePhQERXnYVEoQcW4/R3zOgNi52IgDjUqblAPaT6IopFKp0IAIBEjIUOO995y91/tj73PrVKUqNSS8j36P9X0n96bu2Wuvvc9ee837CAcAOjs7o0qlYgHa2tqWNjc3P7xx48YRIAIUcAeinxw6ujTu6ZbsmZ9Mv2QS805XszXASBxFmtn7pJysuucCqYEKiB7Ivp+Cp+DJBOYAtDeVSsUeeeSR81pa2rudk68PDY/euHzFitcAFnAdHR0xIPtL7EQQNZEYY1AtiWpJxMQoyYHu5yl4Cp6sMFcGFjxTOsCtWLHyTUuWHHwbhoX1etNfW9HLjMrbWlvbKytWrGjv6enJAO3s7IwOHOnQEOyCIigKoE9J3Kfg/xuI59BGAKWnJ2tvbz/VOv0nVbUQvWVL35/6wz1/AP5mxYr2v1OVz7e2rrwjy6pXVCqVgQNH+kRwYDKkNAr8+Ynr5il4Cp5EMFsGFkCXLj3p0ChJL88sJwrmM319d9/0jGesXtzStvKNKIcg1IzaOzdv3vQvQKW1te1DcVz+4fLW9mv7+zZ9LeA5MHaxgEQ1JKojZQNuGM0OCOan4Cl40sNsVGgBtLW19cgoSm8Gtm3p2/Tivr67b1re2v6OOKl+FliA0/uwusNq9NqWlvbPt7a2HtTX1/th1fgcAy9dvrzt43jm3Q91eoP/SEaQcoaUBpHSEFIagtLg3NE+BU/BfzGYjQQWQJ2LjjaRbOnbfPdVAMtaVrxHleO2btn0drzTKofvLV/e9jKV6MttbW3n9vb+8f6WlpYLRJJPhd/321Y1pUFMyeLcEEQpUjIYO4xdtn1/Uf8/B6oFJ6KAzHH+1XscxlDJ/j/HWfe7H/QfEBoOYP86iXN3Nrhn7cSKIpch2M7OzmjZsvYVqJy4dcumixnzNkdA1NbWVurv771VVL+fWjkPEBfHh4rI6Gz7nBISL3GlNIwkQw1J3IAD/IhVEVWiva45etinwjeDdmaSdnvRoOuIdD2xKiKCNi7Q4m8zonM9sa4jEgp4BC3+Npc52Gef64i0K9DPePob4+si1q79i6boOqJx1wR86zr93xs0gGoXJqdtxv10YbSDuEiz+FjnuEtBtJMo3LvPsc3aiaWqAkSVSsW2tLS/EuT7ng5M8DYD0NvbawFzxBGH/ssjj2z/MqtXx2ZoqKom2d/QVQOkPIyULOKGEFOHEogdZb+083315/dfO+2NTzA+kX37D1Qx+MXWwK330YSjzDwyOYphWVP4bR1R8f+Nv3uJYwKeLOAWNjGfIQw7qYlQG/fbWkS65+7f0C4M7Ujo09PUDXoNCYfTtOtRzJ4StRPeSnXcGLow9CJSmcN8TjL2Il7pxlKBu7sotVdp5hmMyLmkgKO7cc+UY27Q1u3DqvQUfjuHJhZRooY8MkJ2RI2qVLDk4+gJz6ETM9nY5uCFTgCnACIcYYx+n6mTNaSnpydraWnfcdzQ0NONMVUnBzAenAwi5TpiB5AoQ0qgdgQ4sCp0LsF0B4sY5YVEKBa/T1hgD7+QlQzl980KX8oL0TF8mYU4pkeOZHgivka7R1hFxPFUyQBBMCzg17KEXbqeWCQw1P28GOXVWE4l5Sgczewh0808jrAFx79T41/lJB5Tz6iNZ9hYlILV33A4Ea9GeQm/pRXLIc4RmYUM6y/YhnAHhptF+DmgE3HNeJ4LG4lez9Mw/BVKB45VKEewhwUHlTAHwaj9JjuM0o9we63GbXIufQDaSUQFN50aqniprp+iORvlDMDE4IiISXlALueP2kkk3Vj9J55HxPnO8hxiFvEAA3oZW1BuZYTvSTfbcnwT+6AzbADAyHkc0yy8AMdzcbQCRzrLEjNMGUUOi8iYx6D+A9uBfuB/11J65Ab6qGAn2yjmEkZqcKBDnTNm2iQNFTVRPXKUVcyBUGvPALrBlIaQUgrZcLCB8d8bfRywvUIArddYWlrCj7D4Pgy5O64d6M3vmyk+lGUsGI8v9nJnBdC3F74NREDmLO83h/Fmtoc7ysAeztAufilnkmkfL3BNfISIFxEDNSAtYDMcRcwq4HXO0p39nm4RvpgzXuPzDhIslwAXUOZQLFD3pJh8aiNOIOb51HiP/pzbGORCETbNhokVhC5E1mD1WxzrylzkHK83MYchgXYb6A/9GjiOmNXA68tCXa/hpzg+Jed5D+d0UpEuhG6UOkfGEbcQh36awdX5ripvEMHqZVyC4WoMYrLG0zgMw1KEV1JmrV7EVfJpPl3ss8HQFay+i+eiXIDySgyLGgqiBaMBpxbsWaEFeAHK2xJHqmtYT8YnpJvbJo5rTgzsaQNR8xet22cBfR0dHXFRhQ5TrW1tbSVrOfjee3sfWr585TI5INrtBv+RDCGlOpIOIVGKJApmFGpPjAqdKq40jA2KjCIhHKZzVBljLHvjs8TT4LOMsju0dRhKCClWunHazweIucoYDHtwKFlYIH7pOwwupL0oaiIOYwFf0P/geBEu0TtIREhHejjGZdxgmjmdAWCYNE+VQZGAw6BomAHDAs6imV/Vb+ZVIvx6Jkyc25AiOL2O/07ElSbmEEaAUWzo0/fh+/UUjNEAUKLMq1BepZ/jGoT3yfkMTcvEQHUIbSoxQo0yFosjMimpCKqXch5lPsYwDocN423MHUpKM4c4x9MDOoNXT710fy/NjPJxLO8iwlAHqlgcLowh112l8B0I41QwSkLM2UScbV/NR6SbD2knUa5OT2GP6lSiy0C+J3ZGEP1QjPlrgv2bO7E6Ozujjo6OCHBZpm93wp2BvJKoWN92MvE4Zb+TE1MehNKAd14leRhpCLhnNmhmDCFHMwIidNzn3CBF5oQvw5ARNT4dEcpu7eUDLOZqRoBd1MkQYko0UaKZhDIJhgiLYjE4Yqo4dpCygPfr7bxDTiHVX/KM5pj1JuJ0tlOnSoaQUA64yiTExGSYYNXFKIbdpFiWJEJFb+FQ1gb7bwpQvM3MWsR+m69Q5kvUOIRdZNSCWZERYxp9JzSF7zEJjpgMIUMZwDKCI+JcavToJzlGunEzcnD5ufTz6YhwDOjFnIDwWYawQQMQLI4MS4YL/ZYZpF6v86WAyeXahL6bRQxyK4bzqSIMYanjwmadYCgVrqRxCQk2jMsSY1FGsIxgjeEyfRkfkApWO/06GS+Bu9TQi1AR303X+pjuF2egsnr16mjjxo2pMXbUqlkIFbtlC/e3trb/uGXFys+JZpf39PQ8DlCpVABoaWl7I7CyqRRfAjioDyKlReALH+jsjKhULF3qJ7lbHKiwDsMamd4ZkQwjpRjJhhGTIiVFbA2WTtvyyQn5Dlyf5r6scAnCIHUM78bwTh7DkgHzKFEHRrkHx1anDBhlMUobTRzLCATZbFBgAEfKFfor1lPnRubzTHZRC2wPw2ynymbneBQlBo43cDIlIoZwCAYlYZiUhRzJIJdKNxdN5Z1WENZhZA1Wv8G1ppk3sZsURwzEOCxlIlJglDuA36Lcj8WiHIWyGuUFlCkxjKJBuOwmpZlnuzq36Ud4EZfx2LSSONcbLbm6XnLK5wwk1MiAiISx9COHN0tiLDV+3XwN9+R9NOzmc/gGTbyIQeooJRQTvBW4OtuM8juUfpRHraMONEfK03Gc6JTnmogytaBpKBEaGFm4Ss/mVql4G32MgVUFET/Id/eX+dzyGt1n5kPTjRs3psuXt5+eZVxiIjmkdcWqTzpburqvb+N3ly9fMUoUfaplxap+UblXhINU7YkO3d7f13s+oC0t7c9X5GKQw1tXtH8StR/tq1QeRyQwLtB1XxPdUmUNdiaVRFIeQkqRV6FN5kWkVPfV5MkHuR86xBdxTG/YpPhFl7dzJMA7qaE4hAUYRvm3LOMT8SJul+XUGt2tZwGWvwf+GZhHGpjY+1QPd7DexBzjHicz8ylT437qdGP4obyUx4tk1L/PKYnlasr8FcM4CFJ9D0rGObqOK2UNOyd17uXM+xU+RBNvYgcpuZLjsDQRUednZHxYzudXk07dJ2llmPcR8fYwJ4qQMEhqmllOyg108hJ6CzbpRKgypodar1E4R6dxLGEQhyFGgRE2INyOUsWxHMeLKHMscH1obbQDIxUyfTOdxPwtg6RACRfY1/I4cKkZpSI3s3uqx6uvZBkp7wXOwzYMNMGhRESuzgXA23gM8UvFM69y4SPPYP6SLlz6fC4dHgJ7A1cv+XjL0QcdxYKjL0NtqxP5aJaO/jKK5r1bTO2m1ta27/b19X4BuLm1deVLVPQYFdmOy67u37Ll/tbW1kNU4w8j2iqqH8/S6gaTlC+A+AfLW0+6/si+O7/S86GhdjS6nGp6MpeOPAq1r/JR+RpdahrMPRkkQ0gphvoISIYkikgVmD9lkycV5JI2d47kDDyd7pEHWPJ2igQL1dFMxAiXy7O5Ir9dc+nkQ0tDwFd1PbspUcHhwi4PDjERxzBMZuYRM8qvEF4rL+WxgEeohOXeiRPhDl3HS6lxCwlnMxJ86SmOJg6mxguBm0Ob8SGfNTj9GifiWMseMmzYtnLJO8JV8m4ug4aTa6Ikd/I++oB3ZB/h55HhGygJGYqSMEDKPM6khfPlSj6r64iYKlw0thFKcCYtIcMRYVzGQwbeKl/kZ8Um+kYW2YzXRZZbcnroQfWdJG6QLqMNMyW34QfqKWeXb+L3ELzlj01iRp6Bk262Au/Ss/gdwlfDc/Y+hww1jg5dTSI9pDFdahCUrqEjGEnXk5SPZTT1u1LTwpO4LH26ue7o/8yMeXjrpj/+j0JXn1y27MQbolgvb2lt/xkRV/VtunvcIFtbV12o6OvA3bSlr7fY9uNLVz3nO3Ft4LLNr7j87WjTWqLoCLIUkBMoLzmNS3ceSrdcTadGDZV+IsQjSBIhyUiQwIqRGvDwpLc/6SD3DHs7coyBpyuITBmTwmPOD8cCIob4gjyPK3Q9MdtR1uDGhYcUYSOxnMKN+hN+QjMvZQjbsL1TMhIiN0K/GeFVsoY9egcJq8kmxq31GhJZQ6rf5CLK3IklCs4XhyKuzmnAzRw6ebaRHeVK00RELfiYc8k7ysfkQi7L1W9Zg6WbvTLctQvDUURyLt/RbmoI6xr2vQbV3vEh/SDXsYadk0rhWuG7a3zmrrIBY3m5fIW7tJOItjCOXlSuZwD4eqNtLyLg0t28IDa0MRriEw5LQkTK/yzfxO/1ZZS5lfqU8eqeMK5tRPIVvqEdnIXhDWTBiebn6ehqxNHAfQYwIMrg0IWUFhzLwPYR0tGM+nCdPdvrpIPv2fx3W3u2bvrDR4KtagA6OjrirVv/+FDf5k3nCnKlOLmktbX92ra2tmNbWtrPbG1deZuiK9F0zZYtvXn6pAF/AMA9d/3uwb7+vvMeazv/LFx2BEOPjvp+B2oM7rDUs3/i/X8+iopYuromOCI2eGTJKCTDPic6GUbC9/9SkEvS/DNj/KKaWRuHIWKAh1jIB1UxbMDJGuzEBSuCMugzqHBcHyS+FnAZFHEp75M17NFrSOQU75WdSIacS6qKcA69bpQ+ooajR6gjxgZvxPaxtrmtWPtnVhrl5QyiWKIggyM3xG/kQj6oXcR0+jFMNQ3SjZNzSbWLknTxPTfKx4iJsDgshhpKxNPIeLOATiLFvQqdz+X4+TSkfDYwb0kqWOkmk24yqWAb2VK5MzZI0zjjLUFdjsjCVjDKn1nE17ULw63Up4tRSzeOLT7bC8sNBZ+H17QcpchyFIxFMiGrn0x10GGzGJsKWRZhM8UZR/Xx59PZGbFtY5TfH0JG0tnZGfX13d3Tt/nulzvhduvkZoRLVPXKLX13v2PLli0PF+qAHYA/vUOFzs6ItN5CbUCxWYLNhCyNyWoOZR5ZsgyA3rWTe6eToQbjSjwSUiqH9zU3Ty4oStLiIpoOiszu23grOOXbspIhNkzjtNmAE0HrGX9iACUjbizcCMMgW+Ml/Jt2YTh3b8k3DioYEdQom9GAI/PjchmHALBp3II1ACVlDXFg3Hxx1sE6LgWg3actzmA2oJtUuzCmzkcY4kE0MI8FaqhLeX3weE+tQhcdg5aIETIc12sXhra950BApVLYIHsCbsdORunFsosME8Z4i3yLKhswM85z7sFJN44691LFhQ3BBwUtJJZFYTI3eOmWZTtxKqSpYjOwGWQpZKnBum1UKpZdqycuCg1H6ZjOzs6of/OmLxnRO+KIK7Zs2bQBVieA5MftjG+pUKlYsnQEq0pmHVkmjb7TGqSDuwFom3zQJglMG48EKTwSJPATE0baewzMzGs8FRSZNyx60hngy5jYzjACWcbPVJGixJsU1vrfS3UecynDgfGUFBeSPXrkTDLap3D8FGGTlzwu5WEcY5uKH1up2F/4bsPYX0KVsfCMwVDl98kH+EVXl3dwTTMLDQg0GvkUw2RchyHfSAyjiMk4kfM5XiRItSLkEjhtfLqggfRVBrlHugMjzYwG5Pu8l5tYSZXWNOUUqryJlM8pCD2zSGzxTrEYYYQs+ML9Zq3huZcBDL1nhMm13yJzgrMlMmvJsoxofpnhXfcyUv13UKEyJQEOvGqMisXnBhnYmLsH9obcGZLVv4GUDdYZssySWku8OCGt/YK7Ht60T0dWMuRDScmwt4NzNXrZTKZpjpBbgUWVa65Q9CYXJfB0KvR4xvchlGFG6nW2iqATJN7UYKmZfHHk2U6elrsBJrNdpwKTMjhxYzET5qaRCvoJDnMZ7YF5DFlYV5YfCejauZwU0+uLALD8mFHy2K6QYTGUszonh/v2HtP4Z+BQMJbfrSnEW2cK2uWlrPyMx0o/ZaP8mOvlNjaHQoVx61h9mMU0Chc6iJXQHjLpIaPK7gbTpuOuCMA0bMwvLruV4UcvxpkRtFSCUpnq0F1ktdfx9RWDdDFtWGddpeIiwZQ1Ep1u514jFtRwTcs1DO64CjUOygmUSozs/iWZeyM9Z2awdkoUOdOSjARbeBgpPcE28ER7dSY2675gMht4pm3y0InfVHbMWxLCPGtnyMAelzYYNyUvTXgEaCS8zQRc1kh4mHosazxjpiM808BC6qHvFEMNsPwGgPZZ0J/DupD/PEwvNXaiIcEjqJyxT0+l4YgqwsTn6Z/HXQCTeor3AdLtkzkUpFB9ZMZVGAXbOWdqqWClxzOsgNOllPUk2nQVbyHla2Q0hWctE00t77rv7nYhlPRpzvnDvybZ6Fkumv+YfWzDT7j1An+6477COcBZ995rBOwxUVTf1lweFdAuiLr3efJGSNz4mlzGm++6rqyjL8xM8/3226t+6n+fpt9k1CdvJFXEZEhiUerAvJnP+Gwg9xpnjPcazxXqENTXse1upmGkYhzYACkD8nx8qeZsllzG2JhyWix+F5wNIxUXf07TxHEE5kmEY0KfLnhWDSNkGP4TmGgzzwga9vLX2OXewUMm4uBG8qfv6xhg701pohfahdnLuB+Aw+ZAS/40u1HtROgOf5vgedbVzCPjMBzHWGGZKG3G0eaUVlPnuJAcM/aci+mW4xjYz4DS2VXiWyffv+yEI5aVsx13/uEvWY3V70zYKOm+CFYQ2bgxHYajvvfgg33H16uLXwiRQDZlAH2sY6WjK+baVZufecLhbztk96P/9ksIWVrTZGMlI2AcktRCGMm76Z6wMFKdsQqksZDD3Jk4n9UiAytjT2XtFO2KzEKQYs4z3UwrogDYU+grpyGX6rOFohYxxjSTQ8rTgp2qDWbP2ENa0CC6Z01Bw8Nt0+AFyLPUPW0HAXszZBUftssZI4+Jp+yaPQUFWgglnYFp9WSOAk4DTkFpQTmOlMOccpiBclQsasjXlCMNfuzyOOYtzO24nJ9Oem2lq8uklZuPy6LjDuW0YyMqv9p3pZHX2V0N/tHAu9+8e6cASQr/WYWLBfrye6ZAIW3bK6a3c11Uu+vK4x858pmHsOv2B6lUpl5EZ/iCSpMM+dlOahD5xFzBsXTrE+TGShmTUvlE7o8dPFUceDoJPD6VMld/50ZFMY0w3+3ngqloR48x5aRgUxZGETmzKxGCY4RF+DS6uRaRBfvWOIYb48glap2mfdJeZGAAx5xT+orrPV3NK2LlXBwdGBbnN+Qbf2BWhza2Gx/H9ryZTCqBYRIJDFQAunvFtGTVWJzDe4+LhVwTjfBIwFbhFQY+LPBoCs5ATWBlBF/eDn8NDE0uiTsjqNje3t46vWswy9tr4gbypTw9JCMIDhNlJJmjyULyBJ57CVBYGB7292i+8RlV4x/SVFC0g3wCI25/NpGc2aZSfWcCuaTLtQopfJ8AkQ+JjGfwbJxes3+QhvynfJ5g6jFVGeOCUAG0r81nOsh5YvRZnFAyfNo4XtNgwjq+uspXVuW1XT7pRAMV+fP3TNvnHL9GeYOB5gZ9Oa2M9/YZKo8JVKyKxqry6LJlK17U0rLy3NDMhXhukblUQQy8SWAQqJkgSwS2CTxjCbxIxqZlrC8wULEtLS0LW1rar25razsYqCeJDgNu9erVU1QsjUFElSZSFg04Fu+CJTth4S5Y9kRFkaaK287ViTUZvn0tnA3hcyxMM96hNReY3IEze6jPAk9KfVzorA6kJAzt51EqebgxI2ngdo2wy/inVFTRJ85B/lxmCUHyWl3FaU3wG6O8hhqOGr4SyTvU/MsHfIFDibyiKmWQOr3UqZDyPizP4y+sNKNcZDJcw7SZEGr0qVmNQ9p7stbWVeegnJg5e5kIB4G2tLa2r1u+vP3UEM9VfB2yCGiFo5uAw/DLOM9MkYDbZnBCJ53RhpwZ/SbgANfS0vZWJboBdLtVeXNk9NmZ5arly1c+a+PGjUFhneQw+A3+Y/EeWDICi3fBot3K4l3K4t0H9C0u4yFfpAVPq0tnr/BVKr5NWg+ph1ljkc3Mq11k+vz7XIY9wN5MN1evejEGXFSnJ793oOCxltDvfHYG7+PsLXAP3Q0GXjxJjN0fVzrRq1xl7/HnbWcBuc2rqzgax81kHM4oKT5MZnAYlJgM51K2kHIjdS4nZQ0pp6G0rv0Lq+RB1siDfEoe4rcCFsshzuMYv/YKKrTS05MtW7HiueKiDym6q1wyL6/VslVizLvVsQHM7WL04tbWtkfAXdHX1/f4GR0dsfT0ZGt4cFThXgvHCQwRXAKCPx2mCe6oULHr8rrXSsW2tq46Dez7VOUBI1wHnO2Emqh7OWpOFcPnWlrafhtFXNHbWxmaZL4AOGg3NI8o7FFKVe97NoM6Z5N0RjBBhRaXF4nNHDrzL3WaKTHe8TOTA3cnViPtrx1eVBlnmg02EYqLHyZ3YvU2GOzRQHexkH0RcCiwnbUhnWQWkAsU7SDGcliYE49HwWXsmLJxOoak0etsJXAnIhWc1vk0hsNIQ3WVV5UFXzL4aTKuNw+yRaboQf3TzzcZi2KMDRVRuQrtL5+6uXTpSYdKlF4qqiers5/o37o5r654cPXq1bcNDo9+ULH/gJh1OLNAxFzf1tb2xZ6enh90HNd2xMPz5P3f2rbtT+fs3tmRwcECw4BYWJbAD09pWfGck52cIlt7Pw+wfHnbFeBaQG4EViD6BnXyhf7eTT8J/f5g6dKlPzGm9IHMyi3Ll6/4Sn//5u9MmF4AFu5yzE8E3amU6jDfgRmGgx4NN8zVGTIFlOoh6FFkYMAfpzd7SFzwjLqQuwtjkmxfkN+T07EfNlvD8szbzxVXUUJo4W9FCCpuvcoDpQh/ikfutomJUJYBvZMmW8wUmjmCOk8Pm2HDH2/sPl7XkW9YxYjCLOZA8QfOaQurcLw22OAJeSWSshPHa+XBsePsFCI6kPCXnD2RQE2e0KEpB2FIxnnIFWxY3cZE9RvB7ejv6z1rq2fefAeINm7cmPb39V4RiV6M6svE6Eni7JdIeWRFy4oLtjdz4wKrD73lxFVfrcF7gUcUkuAJvwG48J6m0g+s4bltrW0/aGlpf75x7hfOufWgbxDRkb7Nva/esmXTTwr2dXTPPffU+vt7P5yl7u0i5nUtLW3vhbF3K50RJmHxbseSXcri3bA4V6F3zVX/mgGYkKwwpioqQCkNHs7KDBfeoT7Qj+VYHJCiRbV8xqmU+0qamAkMFNpPzK+eLUymik+kKai4wzH3ujo7CuqzYsGlvACYdfIEAJ3erMOyCmEeaSiqGEsS2QLsHUbKz9Qs+iNmP34DYGv8N2zILPN4/MZc5yJ5kB6Fso6ZnzYkbmSCz6me4OQ1CmItJ4Q5ssV5jTLfZ2zE/X1fX9+20CiPcpJ/hrOutgJvam1t/1tnzFsFNSAPObVr/tC/5WHphya4ReGno3BUBqOL8qMh//jHgT/Bm9uWt71MRC8jNqM49jiXXdDf338fwV4u5EtbQDo6OqLQ72taW1uPhLwIgjEbeBcsiMHtVso1aPaVH4xMHTDYP7DUXYY1LtiuvsBasjRI0pnCdv+wbMrJJmF8HDiXqPuCIoMcCAmce2xzNX6uDFy0HSdRoQWfiyzd7LFv5E4SzsKfEGVwYDJepR1cygasygzysCeAgGrGKwHviSbU0KYMYegFoDIBZ+6FnhgByCVxZUZdK0CUcnLw4ueqe+Qsj5uUm4ONPG0l0l7jsTwv9KBF+mwwtExfX982xqqF9np0edXR6tWrk76+Tf8qmCtEJOvr6z1vy5YtD3d0dMR5/FkgmwcPLILt+U4DSAfEvf29t9ZTznNQ6u/vfXt/f/994QythvpQnJDQrwGksMGMg8U7YclOZdFuZd6Q0jyiNFWfAC/02vBZZYg61YLDxiEQO56piswkdzicq6x6B4nJeDEjEHbtuTmxppJ2M4XJvOD7q0IXc3Ynwga/PWnGj7GhPC7DhFltzQ7mFSIoHTP3SCsIbah2sMRZ1gSJ6yuSFHWWO+WXbJsyH2EyumdnAzsAZzm0gEtJwVgeYhcD+8iDmHw8PsJTwvKaYOaYwLz5BpBA7oWerFpoAs6NGzdaIIJUVc2j/juNkyiFRg5oriLkZ/Nqjx9SZIwkIvJIaGsmnGI51cTkcmEvmD+ozB9SylUo18auwkQcGFjbcL48biw7ggNGyULucD0suplAhUS6cfZO3k6J4xnBMtHLOB1MFvqZKwNPpj7nNMxM+ozhKUrhIk2Fp7c2VOTU6nyPEYbJy+TCojeWq7STEmfgdKZFDW1+Tl3KZQYOpY4lr521iMm4EYCOSfBNrEYqzsfMwdujNqTTjDezFuPNytmYBUmwhd8FnBAwjaM9Cn4Xw+zWeXi0mjDeXZGPQguMu1dbaTYqmHiyttPApPc2jeKZtwrl8D2pKs0DwcbMk8r38wqvEDHyCmpYehHyJPkonJt0dv27nC5nkuk6ShNft9F4TUgnkayhXv8Sp0cxH2cYhy+nG2/Pzqagf0JYYVYwlQ08mzDShvBZZNoizgnQjT/4bf5NPEjGtZhQMRSksFHa3QBfkW6cgAsVOnstfi0UB0gvdT2NNUa5iCq2YYc6jKuyEw3nVvVMMUuT+RRmJ4FDZR0PhXXhs6m8HX4sCzhVxifJTgpB+MUC9Tp0AFcxtVE1jyl+mBYK0mZ2Qq4KqDtgvuHmKjRVoVSFclXDBRuOJytuJvt7AQ3Vj4yfoA3VL99to0S4Tq+lRdZQz+encOaxyhqsVLDZV3lLlHArdRaGYgazV1x3Opgo7eYQt9wLVxHn/jixigwwFU1tofQv40pG2F1guIhRrDGcY8/im/oq5gVHj44ruesM7ykKVTx6Cv8Dy3dIkaDN+E3Bh2Auk43syNtMSXtxA5vjfNo6vwl9SyPxwh9U8JkHoFkgVYgLV1T4nmutWQavT+CHQDNT5OZZWAhzONhdRCZF+ES3LcIZ+ESapAZlp9iqf6NBWcDVMX/1AAe9/I3U4jqSldCD84aPj8dzMMDO8X87ZMLfdjnkoHsZ5oywrH2mzJUI88hrcf3BoccDv9Zv82EybpK38ZcGI/8vDsdyhoPzjKEjqG0WQ+QydhjhaeNCGdMxUFHCTUhunzXkG0axz7kysGEsXzyemqbG8asVHtKzOZ+Y6/CnLfsjVFOsiTiHAVbri7gC4RapMC4fQDuIGeZ0lPcBrwoOPW9uWVIiEqp8T3r5cvEg9L0gz3ie6MSanQS2AJHjJpfxMaOB8ZQo5DmfeozwI1XOlX2k6Ss8F7iYsVSBjCl4VMJSneObGeYGqiocwHcjlapQtmBrEFuMsRBbjo4zc1fkUJNBUw1qFuIMIgvGQpwpkfV/jxxE+W8OhjKflGosxClusRJxJK8V4dfaSUnewMN6LZ9jIZeyizreFhFGcRgOocRnqXKlXsN9+NOWF5ByPCWWGAcMhuDCYkoM8lmTIczjPeFgN/9OhpkcK1tkltnmLxefQNH3ny/guTqx8hjGDJggP5xcKlyvZ7KMiK4gNRtMjGEl8C+k/EVP5Q9O+bPxAZoj2cOJmFDjWw/bmI8MZBgS6vQ8knCOgtnHQRRjtMPk7tQZgHiHUySjPKwRnwS60MJ50B7ri4E7Ldxi4LfAQ6Hngx2sMHA68JyAMt+aEwd/NPAI8FLGtmsMvjxyThLY6b4L+/fVVnUGB7ZPBxv8R3MdmjJw1Zw5ldgSlZXDTealcs60nkk94+YMO/772G+N6cvdZ8YfX8Jj4aT/xVzJTs5gPs9jDxn+lRv+CFHPyAuJeda4hTyIP+FXMSyg5Pbw4+i9XKgf44vksVCYWXliUd3LaZxLLvQAxZyfsQU8lyOCcgbOQ1szSUipNCTxWn0hNeCq0C6fUxdm5RiEY0yeoJs/mzrK2LG4fgMUYuqsY4C3Hfkow3lCxJQ05Pa+FvAqc5lPpxBh+QieGc8KWKIC1fONl66dxYYFO9aFNuXQ7kcG3gT8PXA2451ZSxXvUJoVZCKJqC6cbTsAa7MoicySubSdDJIRKEWqWQ2NLBpZf4yLWNRYkAzEKsb61LCxv41dZDr2vSiF/MLOHQiepXpQNqAijOj1vJJBvkETrw7vvMnrTIQMF/4/FrtTYkpEKDDI5//Qz0UAZJSDOux71BkkZmZIkHb+/UBjscfZQ94uxzXHOLDLEOO1AkELOPcBAv7lX56JP6qncpcTPmOEpY1NwAV/v5/dopSUhrT2YHBsA7plK9dAI7S57+2wCkSFuZ9jKn2QwjnVr3VwrYG/CT/nqyAXDaHJOMU9wa+1MvAg0C3w1dB4U7i/ceCwg/YMnjUbBlYAZ8y2xLmbi3+bKSSJ2+Wsfn82bfYFTVVnFsQitkpcckhBskpkdS9JG1RsTJC2cfjbuDItKKqYZsIn+UutRdgFvEav4Q3BDjs5HGk6ngHCkequhpoav0C5Wi7hVu0K2o8PPTj8i7UMip2WgbKQ+uBL8HKHydw0myxoBq7xb25LzgrEHyfrxzFWFD8jmgrq9I+0hR7m8Y9OeYtRVkEjaWZsqecskH93bLLK9dEoX5VHfA4C7H0G1ZRgG9pRvkkIOoc58Ews4nWbVyu8BbgAOImxDPcp49sO7jTwbeCbArsKYbT/AO4EnkVYXQbiElx0gLOF/+/A+g7iM3vINv2NfGYhcs5olXqUEUdB2jZU5yIDW4gy/3t+RdMtL78fR6nymtI2fqmh1hPGe5i1i5incSaWs1GeTcYxOJpQqhgewL8H58fyQf+KEF1HFN5soHoFxxFxGKMhpBShGDZJ994F5Zon7F/A8TRzKCONBWpwDMrn/TtyZwraQczTWUkUXqLlDxgw1NgqN7M772+fOHKazuIoYp5OLdBkMGQMSs/MaSo6m3Q1CVVOx3GmczzbKMehLApSchDhz8Dvyfg58/m19HrFf58Oq8npL6fzWJlMCP0xymaB4ZnMwSQ4/drwDB0DZzg4y8BJDo41/tUhCgw4uN/ARmA9cLsEwyOEkxon2qi3eY+gYAcD/B99dvi8sxovxQAAAABJRU5ErkJggg==" alt="LUMORA"></span>
+  <span id="lat"></span>
+  <select id="partner" aria-label="Their language"></select>
+  <button id="ask" title="How to use">?</button>
+  <button id="gear" title="Settings">⚙</button>
+  <button id="menu" title="Transcript">⋯</button>
+</header>
+
+<div id="log"></div>
+<div id="ios" class="banner warn" hidden></div>
+<div id="err" class="banner err" hidden></div>
+
+<footer>
+  <div class="mics">
+    <button class="mic a" id="micMine">🎤 English<small>tap to start</small></button>
+    <button class="mic b" id="micTheirs">🎤 한국어<small>tap to start</small></button>
+  </div>
+  <div class="typerow">
+    <input id="typed" placeholder="…or type here" autocomplete="off">
+    <button id="sendTyped">Send</button>
+  </div>
+  <div id="status"></div>
+</footer>
+
+<dialog id="dlgSet"><div class="pad">
+  <h3>Settings</h3>
+  <label class="f"><span>My language</span><select id="sMine"></select></label>
+  <label class="f"><span>Translation service</span>
+    <select id="sProv">
+      <option value="gtx">Fast — no setup (Google public endpoint)</option>
+      <option value="google">Google Cloud Translation (API key)</option>
+      <option value="deepl">DeepL (API key)</option>
+      <option value="libre">Custom LibreTranslate server</option>
+      <option value="mymemory">MyMemory (slow — backup only)</option>
+    </select></label>
+  <label class="f" id="wKey" hidden><span>API key — stored only on this device</span><input id="sKey" type="password" autocomplete="off"></label>
+  <label class="f" id="wUrl" hidden><span>Server address</span><input id="sUrl" placeholder="https://…/translate"></label>
+  <label class="f"><span>Live update speed</span>
+    <select id="sDeb">
+      <option value="120">Fastest — updates every 0.12 s</option>
+      <option value="220">Fast — every 0.22 s</option>
+      <option value="400">Steady — every 0.4 s</option>
+      <option value="0">Off — only when a sentence finishes</option>
+    </select></label>
+  <label class="chk"><input type="checkbox" id="sSpeak"><span>Read finished sentences out loud</span></label>
+  <label class="chk"><input type="checkbox" id="sAwake"><span>Keep the screen on while interpreting</span></label>
+  <label class="f"><span>Text size</span><select id="sFont">
+    <option value="19">Normal</option><option value="22">Large</option><option value="27">Extra large</option></select></label>
+  <label class="f"><span>Never translate these words (one per line)</span><textarea id="sProtect"></textarea></label>
+  <label class="f"><span>Always translate as (one per line, <code>source = result</code>)</span><textarea id="sGloss"></textarea></label>
+  <p class="note">Keys stay on this phone and are never part of the web page. The default service needs no account and answers in roughly a third of a second; a Google Cloud key is the same engine with a service guarantee behind it.</p>
+  <div class="actions"><button id="setMic">Test microphone</button><button id="setTest">Test speed</button><button id="setClose">Close</button><button class="p" id="setSave">Save</button></div>
+</div></dialog>
+
+<dialog id="dlgMenu"><div class="pad">
+  <h3>Conversation</h3>
+  <div class="actions" style="justify-content:flex-start">
+    <button class="p" id="mClear">🗑 New conversation</button>
+    <button id="mCopy">⧉ Copy transcript</button>
+    <button id="mSave">⇩ Save as file</button>
+  </div>
+  <p class="note" style="margin-top:14px">Tap <b>New conversation</b> before handing the phone to the next visitor —
+  otherwise they can scroll back and read the previous discussion. Copy or save it first if you want to keep it.
+  The transcript never leaves this phone.</p>
+  <div class="actions"><button class="p" id="menuClose">Close</button></div>
+</div></dialog>
+
+<script>
+/* ------------------------------------------------------------------ *
+ * LUMORA Live Interpreter
+ *
+ * Tap a language once to start listening, tap again to stop. While it
+ * listens, half-finished sentences are translated as they are spoken and
+ * the same bubble is rewritten in place, so the reader watches the
+ * sentence assemble rather than waiting for it.
+ *
+ * Two things make that feel instant rather than merely fast:
+ *   - only the newest request is allowed to paint (older answers that
+ *     arrive late are dropped, otherwise the text visibly goes backwards)
+ *   - a request in flight is aborted the moment fresher words arrive
+ * ------------------------------------------------------------------ */
+
+/* ------------------------------ the gate -----------------------------
+ * Be clear about what this is. The page is a plain file on a public web
+ * host, so a determined person with developer tools can walk straight past
+ * this. It is a keep-out sign, not a lock: it stops the link being used by
+ * anyone it gets forwarded to by accident. What matters is that there is
+ * nothing worth stealing behind it — any API key is kept in the browser
+ * storage of the phone it was typed on, never in this file, so opening the
+ * link cannot spend your money or reveal your conversations.
+ * The passphrase is stored as a hash so it is not sitting here in plain text.
+ * -------------------------------------------------------------------- */
+var GATE = 'ff041904b698db14ae54d4f66ac9b4158b132d3f11d2a0e81651c02d8fd7ea83';
+
+var LANGS = [
+  { id:'en', name:'English',    native:'English',   sr:'en-US', tts:'en-US', g:'en',    mm:'en',    dl:'EN' },
+  { id:'ko', name:'Korean',     native:'한국어',     sr:'ko-KR', tts:'ko-KR', g:'ko',    mm:'ko',    dl:'KO' },
+  { id:'zh', name:'Chinese',    native:'中文',       sr:'zh-CN', tts:'zh-CN', g:'zh-CN', mm:'zh-CN', dl:'ZH' },
+  { id:'ja', name:'Japanese',   native:'日本語',     sr:'ja-JP', tts:'ja-JP', g:'ja',    mm:'ja',    dl:'JA' },
+  { id:'hi', name:'Hindi',      native:'हिन्दी',       sr:'hi-IN', tts:'hi-IN', g:'hi',    mm:'hi',    dl:'' },
+  { id:'vi', name:'Vietnamese', native:'Tiếng Việt', sr:'vi-VN', tts:'vi-VN', g:'vi',    mm:'vi',    dl:'' },
+  { id:'th', name:'Thai',       native:'ไทย',        sr:'th-TH', tts:'th-TH', g:'th',    mm:'th',    dl:'' },
+  { id:'id', name:'Indonesian', native:'Indonesia',  sr:'id-ID', tts:'id-ID', g:'id',    mm:'id',    dl:'ID' },
+  { id:'es', name:'Spanish',    native:'Español',    sr:'es-ES', tts:'es-ES', g:'es',    mm:'es',    dl:'ES' },
+  { id:'de', name:'German',     native:'Deutsch',    sr:'de-DE', tts:'de-DE', g:'de',    mm:'de',    dl:'DE' },
+  { id:'fr', name:'French',     native:'Français',   sr:'fr-FR', tts:'fr-FR', g:'fr',    mm:'fr',    dl:'FR' },
+  { id:'ru', name:'Russian',    native:'Русский',    sr:'ru-RU', tts:'ru-RU', g:'ru',    mm:'ru',    dl:'RU' },
+  { id:'ar', name:'Arabic',     native:'العربية',     sr:'ar-SA', tts:'ar-SA', g:'ar',    mm:'ar',    dl:'AR' },
+  { id:'tr', name:'Turkish',    native:'Türkçe',     sr:'tr-TR', tts:'tr-TR', g:'tr',    mm:'tr',    dl:'TR' }
+];
+var L = {}; LANGS.forEach(function (x) { L[x.id] = x; });
+
+var DEFAULTS = {
+  mine:'en', partner:'ko', prov:'gtx', key:'', url:'', speak:true, awake:true, font:22, deb:220,
+  protect:'LUMORA\nLAMKO\nCAS\nMOQ\nCOA\nMSDS\nOLED', gloss:''
+};
+
+function load(k, d) {
+  try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : (d && d.constructor === Object ? Object.assign({}, d, v) : v); }
+  catch (e) { return d; }
+}
+function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+var cfg = load('lumora_talk_cfg', DEFAULTS);
+var lines = load('lumora_talk_log', []);
+
+var $ = function (id) { return document.getElementById(id); };
+var logEl = $('log'), errEl = $('err'), statusEl = $('status'), latEl = $('lat');
+
+/* ----------------------------- glossary ------------------------------ */
+
+function protectedTerms() { return cfg.protect.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
+function termRe(t) { return new RegExp('(^|[^A-Za-z0-9])(' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?![A-Za-z0-9])', 'gi'); }
+function missingTerms(src, out) {
+  return protectedTerms().filter(function (t) { return termRe(t).test(src) && !termRe(t).test(out); });
+}
+function maskTerms(text, terms) {
+  var kept = [];
+  terms.forEach(function (t) { text = text.replace(termRe(t), function (m, pre, hit) { kept.push(hit); return pre + '[[' + (kept.length - 1) + ']]'; }); });
+  return { text: text, kept: kept };
+}
+function unmaskTerms(text, kept) {
+  return text.replace(/\[\s*\[\s*(\d+)\s*\]\s*\]/g, function (m, i) { return kept[+i] != null ? kept[+i] : ''; });
+}
+function applyGlossary(text) {
+  cfg.gloss.split('\n').forEach(function (line) {
+    var p = line.split('=');
+    if (p.length < 2) return;
+    var a = p[0].trim(), b = p.slice(1).join('=').trim();
+    if (a) text = text.replace(new RegExp(a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), b);
+  });
+  return text;
+}
+function decodeEntities(s) { var d = document.createElement('textarea'); d.innerHTML = s; return d.value; }
+
+/* ---------------------------- translation ---------------------------- */
+
+var ENGINES = {
+  /* Google's public web endpoint. No account, no key, ~0.15-0.6 s, same
+     engine as Translate itself. It carries no service guarantee, which is
+     why the official key is one line away in Settings. */
+  gtx: function (q, from, to, signal) {
+    var u = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' +
+            L[from].g + '&tl=' + L[to].g + '&q=' + encodeURIComponent(q);
+    return fetch(u, { signal: signal }).then(function (r) {
+      if (!r.ok) throw new Error('Translation service returned ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      return (j[0] || []).map(function (x) { return x[0]; }).join('');
+    });
+  },
+  google: function (q, from, to, signal) {
+    if (!cfg.key) return Promise.reject(new Error('No Google API key saved. Open Settings.'));
+    return fetch('https://translation.googleapis.com/language/translate/v2?key=' + encodeURIComponent(cfg.key), {
+      method:'POST', headers:{ 'Content-Type':'application/json' }, signal: signal,
+      body: JSON.stringify({ q:q, source:L[from].g, target:L[to].g, format:'text' })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.error) throw new Error(j.error.message || 'Google refused the request.');
+      return j.data.translations[0].translatedText;
+    });
+  },
+  deepl: function (q, from, to, signal) {
+    if (!cfg.key) return Promise.reject(new Error('No DeepL key saved. Open Settings.'));
+    if (!L[from].dl || !L[to].dl) return Promise.reject(new Error('DeepL does not cover that language pair.'));
+    var host = /:fx$/.test(cfg.key) ? 'https://api-free.deepl.com' : 'https://api.deepl.com';
+    return fetch(host + '/v2/translate', {
+      method:'POST', signal: signal,
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded', 'Authorization':'DeepL-Auth-Key ' + cfg.key },
+      body: 'text=' + encodeURIComponent(q) + '&source_lang=' + L[from].dl + '&target_lang=' + L[to].dl
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.message) throw new Error(j.message);
+      return j.translations[0].text;
+    });
+  },
+  libre: function (q, from, to, signal) {
+    if (!cfg.url) return Promise.reject(new Error('No server address saved. Open Settings.'));
+    return fetch(cfg.url, {
+      method:'POST', headers:{ 'Content-Type':'application/json' }, signal: signal,
+      body: JSON.stringify({ q:q, source:from, target:to, format:'text', api_key: cfg.key || undefined })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.error) throw new Error(j.error);
+      return j.translatedText;
+    });
+  },
+  mymemory: function (q, from, to, signal) {
+    var u = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(q) +
+            '&langpair=' + L[from].mm + '|' + L[to].mm + '&de=yogesh.gawale@lamko.co.kr';
+    return fetch(u, { signal: signal }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.responseData || !j.responseData.translatedText) throw new Error('No translation came back.');
+      var t = j.responseData.translatedText;
+      if (/MYMEMORY WARNING|QUOTA/i.test(t)) throw new Error('Free daily limit reached. Switch service in Settings.');
+      return t;
+    });
+  }
+};
+function engine() { return ENGINES[cfg.prov] || ENGINES.gtx; }
+
+/* One round trip, glossary applied. `careful` adds the second, masked pass
+   that rescues a product name the engine swallowed — worth it on a finished
+   sentence, far too slow to do while someone is still talking. */
+function translateOnce(q, from, to, signal, careful) {
+  var t0 = performance.now();
+  return engine()(q, from, to, signal).then(function (out) {
+    out = decodeEntities(out);
+    var ms = Math.round(performance.now() - t0);
+    if (!careful) return { text: applyGlossary(out), ms: ms };
+    var lost = missingTerms(q, out);
+    if (!lost.length) return { text: applyGlossary(out), ms: ms };
+    var m = maskTerms(q, lost);
+    return engine()(m.text, from, to, signal)
+      .then(function (o2) { return { text: applyGlossary(unmaskTerms(decodeEntities(o2), m.kept)), ms: Math.round(performance.now() - t0) }; })
+      .catch(function () { return { text: applyGlossary(out), ms: ms }; });
+  });
+}
+
+/* Only the newest request may paint. Without this the display flickers
+   backwards whenever a short early fragment answers after a longer one.
+   Note what is deliberately NOT done here: aborting the request already in
+   flight. That sounds like the obvious optimisation and it was the first
+   version, but measured against the live service it starved the screen —
+   every call was cancelled by the next one before it could answer, so the
+   translation only appeared about once a second. Letting each request finish
+   and gating the next one on its completion (see dispatchLive) makes the
+   refresh rate equal to the round trip, which is as fast as it can be. */
+var seq = 0, lastSent = '';
+function requestTranslation(q, from, to, careful, apply) {
+  var mine = ++seq;
+  return translateOnce(q, from, to, undefined, careful).then(function (r) {
+    if (mine !== seq) return null;            // superseded — drop it
+    showLatency(r.ms);
+    apply(r.text, r.ms);
+    return r;
+  }).catch(function (e) {
+    if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) return null;
+    if (mine !== seq) return null;
+    throw e;
+  });
+}
+function showLatency(ms) { latEl.textContent = ms + ' ms'; }
+
+/* ------------------------------ speaking ----------------------------- */
+
+var muteMic = false;   // our own voice must not be transcribed back in
+function say(text, langId) {
+  if (!('speechSynthesis' in window) || !text) return;
+  try {
+    speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = L[langId].tts;
+    var vs = speechSynthesis.getVoices() || [];
+    var v = vs.find(function (x) { return x.lang && x.lang.toLowerCase() === u.lang.toLowerCase(); }) ||
+            vs.find(function (x) { return x.lang && x.lang.toLowerCase().split(/[-_]/)[0] === u.lang.toLowerCase().split(/[-_]/)[0]; });
+    if (v) u.voice = v;
+    u.rate = 1;
+    muteMic = true;
+    u.onend = u.onerror = function () { setTimeout(function () { muteMic = false; }, 250); };
+    speechSynthesis.speak(u);
+  } catch (e) { muteMic = false; }
+}
+if ('speechSynthesis' in window) { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = function () { speechSynthesis.getVoices(); }; }
+
+/* ------------------------------ listening ---------------------------- */
+
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+/* iPhone and iPad. Every browser on iOS — Chrome and Firefox included — is
+   Safari underneath, so the browser choice makes no difference.
+   Safari does have speech recognition, but WebKit's own bug tracker has an
+   open report that `interimResults` plus `continuous` falls back to slow
+   cloud recognition and only ever returns finished sentences. That is exactly
+   the half-sentence streaming this page is built on, so on iOS we ask for
+   less rather than fight it, and we tell the user what to expect instead of
+   letting them find out at the booth. */
+var IS_IOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
+             (/Mac/.test(navigator.platform || '') && navigator.maxTouchPoints > 1);
+var rec = null;
+var active = null;        // 'mine' | 'theirs' | null  — which button is armed
+var wantOn = false;       // the toggle the user set, independent of restarts
+var live = null;          // the bubble currently being written
+var debTimer = null;
+
+function dirs() {
+  return active === 'theirs' ? { from: cfg.partner, to: cfg.mine } : { from: cfg.mine, to: cfg.partner };
+}
+
+/* Ask for the microphone explicitly before starting recognition.
+   SpeechRecognition is supposed to raise the permission prompt by itself, but
+   on Android — and especially once the page has been added to the home screen
+   and runs without browser chrome — it can fail silently instead: no prompt,
+   no error, no words. getUserMedia always prompts, always reports, and leaves
+   the microphone warm for the recogniser that follows. */
+function ensureMic() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.resolve(true);
+  return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
+    st.getTracks().forEach(function (t) { t.stop(); });
+    return true;
+  }).catch(function (e) {
+    var n = (e && e.name) || 'error';
+    if (n === 'NotAllowedError') fail('The microphone is blocked for this page. Tap the padlock (or ⓘ) next to the address, choose Permissions, allow Microphone, then tap again.');
+    else if (n === 'NotFoundError') fail('No microphone was found on this device.');
+    else fail('The microphone could not be opened (' + n + ').');
+    return false;
+  });
+}
+
+var heardAnything = false, silentTimer = null;
+
+function toggle(which, btn) {
+  if (active === which) { stop(); return; }
+  if (active) stop();
+  if (!SR) { fail('This browser cannot listen. Use Chrome on Android, or type instead.'); return; }
+  active = which; wantOn = true;
+  warmUp();
+  paintButtons();
+  clearErr();
+  setStatus('Opening the microphone…');
+  ensureMic().then(function (allowed) {
+    if (!wantOn) return;
+    if (!allowed) { wantOn = false; active = null; paintButtons(); setStatus(''); return; }
+    heardAnything = false;
+    startRecognition();
+    /* If nothing at all arrives, say so instead of sitting there looking busy. */
+    clearTimeout(silentTimer);
+    silentTimer = setTimeout(function () {
+      if (wantOn && !heardAnything) {
+        fail('The microphone is open but no words are arriving. On Android this is almost always Google voice typing being switched off: Settings → System → Languages & input → On-screen keyboard → Gboard → Voice typing. You can use the typing box meanwhile.');
+      }
+    }, 9000);
+  });
+}
+
+function startRecognition() {
+  var d = dirs();
+  rec = new SR();
+  rec.lang = L[d.from].sr;
+  rec.interimResults = true;
+  rec.continuous = !IS_IOS;   // Android ends anyway and onend restarts it; on iOS asking for continuous makes it worse
+  rec.maxAlternatives = 1;
+
+  /* Visible proof of life at every stage. When it goes wrong the user needs to
+     know WHICH stage failed — mic never opened, opened but heard nothing, or
+     heard words that never got translated. */
+  rec.onstart = function () { setStatus('Listening — tap the same button to stop'); };
+  rec.onspeechstart = function () { heardAnything = true; setStatus('Hearing you…'); };
+  rec.onnomatch = function () { setStatus('Did not catch that — say it again'); };
+
+  rec.onresult = function (e) {
+    if (muteMic) return;
+    heardAnything = true;
+    var interim = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      var chunk = e.results[i][0].transcript;
+      if (e.results[i].isFinal) commit(chunk);
+      else interim += chunk;
+    }
+    interim = interim.trim();
+    if (interim) { setStatus(interim.slice(-70)); update(interim); }
+  };
+
+  rec.onerror = function (e) {
+    if (e.error === 'aborted') return;
+    if (e.error === 'no-speech') { setStatus('No speech heard — still listening'); return; }
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      wantOn = false; stop();
+      fail('Microphone permission is blocked. Allow the microphone for this page in Chrome, then tap again.');
+      return;
+    }
+    if (e.error === 'network') { fail('Speech recognition needs internet.'); return; }
+    fail('Microphone problem (' + e.error + ').');
+  };
+
+  /* Chrome ends the session after a pause whether or not we asked it to.
+     While the toggle is on, start straight back up so the user never has
+     to think about it. */
+  rec.onend = function () {
+    if (!wantOn) return;
+    setTimeout(function () {
+      if (!wantOn) return;
+      try { rec.start(); }
+      catch (e) { try { startRecognition(); } catch (e2) {} }   // a stale object cannot be restarted; build a fresh one
+    }, 200);
+  };
+
+  try { rec.start(); } catch (e) { fail('Could not start listening (' + (e && e.name) + ').'); }
+}
+
+function stop() {
+  wantOn = false; active = null;
+  clearTimeout(debTimer); debTimer = null; pendingText = ''; liveBusy = false;
+  clearTimeout(silentTimer);
+  if (rec) { try { rec.onend = null; rec.stop(); } catch (e) {} }
+  rec = null;
+  finishLive();
+  paintButtons();
+  setStatus('');
+}
+
+/* A half-spoken sentence: retranslate on a timer, repaint in place.
+ *
+ * This must THROTTLE, not debounce. Speech recognition delivers a longer
+ * interim result roughly every 0.2 s, so a debounce that waits for a quiet
+ * gap never fires while someone is talking — measured live, the screen sat
+ * on "…" for the whole sentence and only filled in at the end. A throttle
+ * guarantees a repaint every `deb` milliseconds no matter how fast the
+ * words arrive, which is what makes it read as live. */
+var pendingText = '', lastDispatch = 0;
+function update(text) {
+  var d = dirs();
+  if (!live) { live = addLine(text, d.from, d.to, true); }
+  live.t = text;
+  paintLine(live);
+  if (!cfg.deb) return;                     // "off" — wait for the sentence to end
+  pendingText = text;
+  if (debTimer) return;                     // one is already queued
+  var wait = Math.max(0, cfg.deb - (performance.now() - lastDispatch));
+  debTimer = setTimeout(dispatchLive, wait);
+}
+var liveBusy = false;
+function dispatchLive() {
+  debTimer = null;
+  if (liveBusy) return;                     // the next one fires when this answers
+  var text = pendingText;
+  if (!live || !text || text === lastSent) return;
+  lastSent = text;
+  lastDispatch = performance.now();
+  liveBusy = true;
+  var d = { from: live.from, to: live.to };
+  requestTranslation(text, d.from, d.to, false, function (out) {
+    if (!live) return;
+    live.out = out; paintLine(live);
+  }).catch(function () {}).then(function () {
+    liveBusy = false;
+    if (live && pendingText && pendingText !== lastSent && !debTimer) {
+      debTimer = setTimeout(dispatchLive, Math.max(0, cfg.deb - (performance.now() - lastDispatch)));
+    }
+  });
+}
+
+/* The first call of the day pays for DNS and the TLS handshake — measured at
+   about 900 ms against 130 ms once the connection is warm. Spend that before
+   anyone is waiting for it. */
+var warmed = false;
+function warmUp() {
+  if (warmed) return;
+  warmed = true;
+  try { engine()('hello', cfg.mine, cfg.partner).catch(function () {}); } catch (e) {}
+}
+
+/* The sentence is done: one careful translation, lock it, read it aloud. */
+function commit(chunk) {
+  var d = dirs();
+  var text = (chunk || '').trim();
+  if (!text) return;
+  clearTimeout(debTimer); debTimer = null; pendingText = ''; liveBusy = false;
+  var row = live || addLine(text, d.from, d.to, true);
+  live = null;
+  row.t = text; row.pending = true;
+  paintLine(row);
+  requestTranslation(text, d.from, d.to, true, function (out) {
+    row.out = out; row.pending = false; row.live = false;
+    paintLine(row); persist();
+    if (cfg.speak) say(out, d.to);
+  }).catch(function (e) {
+    row.pending = false; row.live = false; row.error = e.message || 'Translation failed.';
+    paintLine(row); persist(); fail(row.error);
+  });
+  lastSent = '';
+}
+function finishLive() {
+  if (!live) return;
+  var row = live; live = null;
+  if (!row.t) { lines.splice(lines.indexOf(row), 1); draw(); return; }
+  row.live = false;
+  if (!row.out) commitRow(row); else { paintLine(row); persist(); }
+}
+function commitRow(row) {
+  requestTranslation(row.t, row.from, row.to, true, function (out) {
+    row.out = out; row.pending = false; paintLine(row); persist();
+    if (cfg.speak) say(out, row.to);
+  }).catch(function () { row.pending = false; paintLine(row); });
+}
+
+/* ------------------------------ rendering ---------------------------- */
+
+function addLine(t, from, to, isLive) {
+  var row = { t:t, out:'', from:from, to:to, at:new Date().toISOString(), live:!!isLive, id:'l' + (Date.now() + Math.floor(performance.now())) + lines.length };
+  lines.push(row);
+  logEl.appendChild(nodeFor(row));
+  logEl.scrollTop = logEl.scrollHeight;
+  hideHint();
+  return row;
+}
+function nodeFor(row) {
+  var d = document.createElement('div');
+  d.className = 'row' + (row.from === cfg.mine ? ' me' : '') + (row.live ? ' livebub' : '');
+  d.id = row.id;
+  d.innerHTML = '<div class="b"><div class="big"></div><div class="orig"></div><div class="tools"></div></div>';
+  fill(d, row);
+  return d;
+}
+/* Repainting only the two text nodes keeps the live bubble from flickering
+   the way a full redraw does. */
+function paintLine(row) {
+  var el = document.getElementById(row.id);
+  if (!el) { logEl.appendChild(nodeFor(row)); return; }
+  el.className = 'row' + (row.from === cfg.mine ? ' me' : '') + (row.live ? ' livebub' : '');
+  fill(el, row);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function fill(el, row) {
+  var big = el.querySelector('.big'), orig = el.querySelector('.orig'), tools = el.querySelector('.tools');
+  big.textContent = row.error ? row.error : row.out;
+  big.style.color = row.error ? '#8a1c12' : '';
+  big.style.opacity = (!row.out && !row.error) ? '.4' : '1';
+  if (!row.out && !row.error) big.textContent = '…';
+  orig.textContent = row.t;
+  if (row.out && !row.live) {
+    if (!tools.childElementCount) {
+      tools.innerHTML = '<button data-say="' + row.id + '">🔊 Again</button><button data-copy="' + row.id + '">⧉ Copy</button>';
+    }
+  } else tools.innerHTML = '';
+}
+function draw() {
+  logEl.innerHTML = '';
+  if (!lines.length) { showHint(); return; }
+  lines.forEach(function (r) { logEl.appendChild(nodeFor(r)); });
+  logEl.scrollTop = logEl.scrollHeight;
+}
+/* The visitor is the one holding the phone when the orange button is on, so
+   the instruction has to be in THEIR language, not only in yours. The four we
+   meet most are written out properly; any other language is translated once
+   by the same engine and kept, so it costs one call per language, ever. */
+var GUEST_EN = 'Tap the orange button and speak in your own language. Tap it again to stop. The translation appears while you speak.';
+var GUEST = {
+  en: GUEST_EN,
+  ko: '\uc8fc\ud669\uc0c9 \ubc84\ud2bc\uc744 \ub204\ub974\uace0 \ud55c\uad6d\uc5b4\ub85c \ub9d0\uc500\ud574 \uc8fc\uc138\uc694. \ub2e4\uc2dc \ub204\ub974\uba74 \uba48\ucda5\ub2c8\ub2e4. \ub9d0\uc500\ud558\uc2dc\ub294 \ub3d9\uc548 \ubc88\uc5ed\uc774 \ubc14\ub85c \ud45c\uc2dc\ub429\ub2c8\ub2e4.',
+  zh: '\u8bf7\u70b9\u51fb\u6a59\u8272\u6309\u94ae\uff0c\u7528\u4e2d\u6587\u8bf4\u8bdd\u3002\u518d\u6b21\u70b9\u51fb\u5373\u53ef\u505c\u6b62\u3002\u60a8\u8bf4\u8bdd\u65f6\uff0c\u8bd1\u6587\u4f1a\u5b9e\u65f6\u663e\u793a\u3002',
+  ja: '\u30aa\u30ec\u30f3\u30b8\u306e\u30dc\u30bf\u30f3\u3092\u62bc\u3057\u3066\u65e5\u672c\u8a9e\u3067\u304a\u8a71\u3057\u304f\u3060\u3055\u3044\u3002\u3082\u3046\u4e00\u5ea6\u62bc\u3059\u3068\u505c\u6b62\u3057\u307e\u3059\u3002\u304a\u8a71\u3057\u306e\u9593\u3001\u8a33\u304c\u305d\u306e\u5834\u3067\u8868\u793a\u3055\u308c\u307e\u3059\u3002'
+};
+function guestText(id) {
+  if (GUEST[id]) return GUEST[id];
+  try { var c = localStorage.getItem('lumora_guide_' + id); if (c) return c; } catch (e) {}
+  translateOnce(GUEST_EN, 'en', id, undefined, false).then(function (r) {
+    try { localStorage.setItem('lumora_guide_' + id, r.text); } catch (e) {}
+    if (!lines.length) showHint();
+  }).catch(function () {});
+  return GUEST_EN;
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+    return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c];
+  });
+}
+function showHint() {
+  logEl.innerHTML = '<div class="hint" id="hint">' +
+    'Tap <b>' + L[cfg.mine].native + '</b> and start speaking. It keeps listening until you tap the same button again.<br><br>' +
+    'Tap <b>' + L[cfg.partner].native + '</b> and hand the phone over when they speak.' +
+    '<div class="guest">' + esc(guestText(cfg.partner)) + '</div></div>';
+}
+function hideHint() { var h = $('hint'); if (h) h.remove(); }
+
+logEl.addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  var id = b.dataset.say || b.dataset.copy;
+  var row = lines.find(function (r) { return r.id === id; });
+  if (!row) return;
+  if (b.dataset.say) say(row.out, row.to);
+  else { copy(row.out); b.textContent = '✓ Copied'; setTimeout(function () { b.textContent = '⧉ Copy'; }, 1400); }
+});
+
+function paintButtons() {
+  var m = $('micMine'), t = $('micTheirs');
+  m.className = 'mic a' + (active === 'mine' ? ' on' : '') + (active === 'theirs' ? ' dim' : '');
+  t.className = 'mic b' + (active === 'theirs' ? ' on' : '') + (active === 'mine' ? ' dim' : '');
+  m.innerHTML = (active === 'mine' ? '<span class="dot"></span>' : '🎤 ') + L[cfg.mine].native +
+                '<small>' + (active === 'mine' ? 'listening — tap to stop' : 'tap to start') + '</small>';
+  t.innerHTML = (active === 'theirs' ? '<span class="dot"></span>' : '🎤 ') + L[cfg.partner].native +
+                '<small>' + (active === 'theirs' ? 'listening — tap to stop' : 'tap to start') + '</small>';
+  document.documentElement.style.setProperty('--fs', cfg.font + 'px');
+}
+
+function persist() { store('lumora_talk_log', lines.filter(function (r) { return !r.live; }).slice(-300)); }
+function setStatus(s) { statusEl.textContent = s || ''; }
+function fail(m) { errEl.textContent = m; errEl.hidden = false; clearTimeout(fail._t); fail._t = setTimeout(clearErr, 7000); }
+function clearErr() { errEl.hidden = true; }
+function copy(t) {
+  if (navigator.clipboard) return navigator.clipboard.writeText(t).catch(function () {});
+  var a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select();
+  try { document.execCommand('copy'); } catch (e) {} a.remove();
+}
+
+/* ------------------------------- buttons ----------------------------- */
+
+$('micMine').onclick = function () { toggle('mine'); };
+$('micTheirs').onclick = function () { toggle('theirs'); };
+
+$('sendTyped').onclick = sendTyped;
+$('typed').addEventListener('keydown', function (e) { if (e.key === 'Enter') sendTyped(); });
+function sendTyped() {
+  var i = $('typed'), t = i.value.trim(); if (!t) return;
+  i.value = '';
+  var d = active === 'theirs' ? { from: cfg.partner, to: cfg.mine } : { from: cfg.mine, to: cfg.partner };
+  var row = addLine(t, d.from, d.to, false);
+  row.pending = true; paintLine(row);
+  requestTranslation(t, d.from, d.to, true, function (out) {
+    row.out = out; row.pending = false; paintLine(row); persist();
+    if (cfg.speak) say(out, d.to);
+  }).catch(function (e) { row.error = e.message || 'Translation failed.'; row.pending = false; paintLine(row); fail(row.error); });
+}
+
+/* --------------------------- language pickers ------------------------ */
+
+function fillSelect(sel, chosen) {
+  sel.innerHTML = '';
+  LANGS.forEach(function (x) {
+    var o = document.createElement('option');
+    o.value = x.id; o.textContent = x.native + (x.native === x.name ? '' : ' · ' + x.name);
+    sel.appendChild(o);
+  });
+  sel.value = chosen;
+}
+var partnerSel = $('partner');
+fillSelect(partnerSel, cfg.partner);
+partnerSel.onchange = function () {
+  cfg.partner = partnerSel.value; store('lumora_talk_cfg', cfg);
+  if (active) { stop(); }
+  paintButtons(); if (!lines.length) showHint();
+};
+
+/* ------------------------------ settings ----------------------------- */
+
+var dlgSet = $('dlgSet');
+$('gear').onclick = function () {
+  fillSelect($('sMine'), cfg.mine);
+  $('sProv').value = cfg.prov; $('sKey').value = cfg.key; $('sUrl').value = cfg.url;
+  $('sSpeak').checked = cfg.speak; $('sAwake').checked = cfg.awake;
+  $('sFont').value = String(cfg.font); $('sDeb').value = String(cfg.deb);
+  $('sProtect').value = cfg.protect; $('sGloss').value = cfg.gloss;
+  provRows(); dlgSet.showModal();
+};
+$('sProv').onchange = provRows;
+function provRows() {
+  var p = $('sProv').value;
+  $('wKey').hidden = (p === 'gtx' || p === 'mymemory');
+  $('wUrl').hidden = (p !== 'libre');
+}
+/* One button that answers "why did nothing happen?" without needing me. */
+$('setMic').onclick = function () {
+  var b = $('setMic');
+  b.textContent = 'Speak now…';
+  var perm = navigator.permissions ? navigator.permissions.query({ name: 'microphone' }).then(function (p) { return p.state; }).catch(function () { return 'unknown'; })
+                                   : Promise.resolve('unknown');
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    var ctx = new AC(), src = ctx.createMediaStreamSource(st), an = ctx.createAnalyser();
+    an.fftSize = 512; src.connect(an);
+    var buf = new Uint8Array(an.fftSize), peak = 0, t0 = performance.now();
+    (function tick() {
+      an.getByteTimeDomainData(buf);
+      for (var i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128));
+      if (performance.now() - t0 < 3500) return requestAnimationFrame(tick);
+      st.getTracks().forEach(function (t) { t.stop(); });
+      try { ctx.close(); } catch (e) {}
+      perm.then(function (state) {
+        var lvl = Math.round(peak / 128 * 100);
+        b.textContent = 'Test microphone';
+        fail('Microphone: permission ' + state + ', loudness heard ' + lvl + '%. ' +
+             'Speech engine ' + (SR ? 'available' : 'MISSING') + '. ' +
+             (lvl < 3 ? 'That is silence — the microphone is not picking you up.'
+                      : 'Sound is reaching the page, so any failure is in the speech engine, not the microphone.'));
+      });
+    })();
+  }).catch(function (e) {
+    b.textContent = 'Test microphone';
+    fail('Microphone refused: ' + ((e && e.name) || 'error') + '. Allow it from the padlock next to the address.');
+  });
+};
+
+$('setClose').onclick = function () { dlgSet.close(); };
+$('setTest').onclick = function () {
+  var b = $('setTest'), old = cfg.prov, oldKey = cfg.key, oldUrl = cfg.url;
+  cfg.prov = $('sProv').value; cfg.key = $('sKey').value.trim(); cfg.url = $('sUrl').value.trim();
+  b.textContent = 'Testing…';
+  var t0 = performance.now();
+  translateOnce('We can supply this material next week', cfg.mine, cfg.partner, undefined, false)
+    .then(function (r) { b.textContent = r.ms + ' ms ✓'; })
+    .catch(function (e) { b.textContent = 'Failed'; fail(e.message || 'That service did not answer.'); })
+    .then(function () {
+      cfg.prov = old; cfg.key = oldKey; cfg.url = oldUrl;
+      setTimeout(function () { b.textContent = 'Test speed'; }, 4000);
+    });
+};
+$('setSave').onclick = function () {
+  cfg.mine = $('sMine').value; cfg.prov = $('sProv').value; cfg.key = $('sKey').value.trim();
+  cfg.url = $('sUrl').value.trim(); cfg.speak = $('sSpeak').checked; cfg.awake = $('sAwake').checked;
+  cfg.font = +$('sFont').value; cfg.deb = +$('sDeb').value;
+  cfg.protect = $('sProtect').value; cfg.gloss = $('sGloss').value;
+  if (cfg.mine === cfg.partner) { cfg.partner = cfg.mine === 'en' ? 'ko' : 'en'; partnerSel.value = cfg.partner; }
+  store('lumora_talk_cfg', cfg);
+  if (active) stop();
+  paintButtons(); if (!lines.length) showHint();
+  keepAwake(); dlgSet.close();
+};
+
+var dlgMenu = $('dlgMenu');
+$('menu').onclick = function () { dlgMenu.showModal(); };
+$('menuClose').onclick = function () { dlgMenu.close(); };
+$('mCopy').onclick = function () { copy(transcript()); $('mCopy').textContent = '✓ Copied'; setTimeout(function () { $('mCopy').textContent = '⧉ Copy transcript'; }, 1500); };
+$('mSave').onclick = function () {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([transcript()], { type: 'text/plain;charset=utf-8' }));
+  a.download = 'conversation.txt';
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 900);
+};
+$('mClear').onclick = function () { lines = []; persist(); draw(); dlgMenu.close(); };
+function transcript() {
+  return lines.map(function (e) {
+    return (e.from === cfg.mine ? 'ME' : 'THEM') + ' (' + L[e.from].name + '): ' + e.t + '\n   → ' + (e.out || '');
+  }).join('\n\n');
+}
+
+/* ---------------------------- screen wake ---------------------------- */
+
+var wake = null;
+function keepAwake() {
+  if (!('wakeLock' in navigator)) return;
+  if (cfg.awake && !wake) navigator.wakeLock.request('screen').then(function (w) { wake = w; w.onrelease = function () { wake = null; }; }).catch(function () {});
+  if (!cfg.awake && wake) { try { wake.release(); } catch (e) {} wake = null; }
+}
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') keepAwake();
+  else if (active) stop();          // a backgrounded tab cannot hold the mic anyway
+});
+
+/* ------------------------------- start ------------------------------- */
+
+/* -------------------------- gate and first help ---------------------- */
+
+function sha256hex(s) {
+  if (!(window.crypto && crypto.subtle)) return Promise.resolve('');
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function (b) {
+    return Array.prototype.map.call(new Uint8Array(b), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+  });
+}
+var gateEl = $('gate');
+$('gateLogo').src = document.querySelector('header .t img').src;
+function isUnlocked() { try { return localStorage.getItem('lumora_talk_key') === GATE; } catch (e) { return false; } }
+function openGate() { gateEl.hidden = false; setTimeout(function () { $('gatePw').focus(); }, 60); }
+function tryGate() {
+  var v = $('gatePw').value.trim();
+  sha256hex(v).then(function (h) {
+    if (h && h === GATE) {
+      try { localStorage.setItem('lumora_talk_key', GATE); } catch (e) {}
+      gateEl.hidden = true; $('gateErr').textContent = ''; maybeHelp();
+    } else {
+      $('gateErr').textContent = 'That is not the passphrase.';
+      $('gatePw').value = '';
+    }
+  });
+}
+$('gateGo').onclick = tryGate;
+$('gatePw').addEventListener('keydown', function (e) { if (e.key === 'Enter') tryGate(); });
+
+var helpEl = $('help');
+function maybeHelp() { try { if (!localStorage.getItem('lumora_talk_seen')) showHelp(); } catch (e) {} }
+function showHelp() { helpEl.hidden = false; }
+$('ask').onclick = showHelp;
+$('helpClose').onclick = function () {
+  helpEl.hidden = true;
+  try { localStorage.setItem('lumora_talk_seen', '1'); } catch (e) {}
+};
+
+if (IS_IOS) {
+  var iosEl = $('ios');
+  iosEl.innerHTML = '<b>You are on an iPhone or iPad.</b>' +
+    'Listening works, but Apple only hands over a sentence once you stop speaking, so the text will not build up ' +
+    'live the way it does on Android — and it is slower. Speak one short sentence at a time, or use the typing box. ' +
+    'Everything else works normally. Changing browser will not help: Chrome on iOS is Safari underneath.';
+  iosEl.hidden = false;
+}
+
+if (!isUnlocked()) openGate(); else maybeHelp();
+
+lines.forEach(function (r, i) { if (!r.id) r.id = 'l0' + i; r.live = false; });
+paintButtons(); draw(); keepAwake();
+if (!SR) fail('Speech needs Chrome on Android or a desktop. You can still type below.');
+if (location.protocol !== 'https:' && location.protocol !== 'file:' && location.hostname !== 'localhost')
+  fail('Open this page over https, otherwise the microphone stays blocked.');
+
+/* exposed for the automated tests */
+window.__talk = { get lines() { return lines; }, update: update, commit: commit, cfg: cfg,
+                  toggle: toggle, get active() { return active; }, requestTranslation: requestTranslation,
+                  gate: GATE };
+</script>
+</body>
+</html>
